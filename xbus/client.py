@@ -2,8 +2,8 @@ from .schema import parse_schema
 
 
 def guess_iface(schema, key, value):
-    for iface, s in schema['interfaces'].items():
-        if value in s[key]:
+    for iface, s in schema.interfaces.items():
+        if value in getattr(s, key):
             return iface
     raise ValueError(value)
 
@@ -23,9 +23,9 @@ class Client:
 
     async def iter_paths(self, name, path=''):
         schema = await self.introspect(name, path or '/')
-        if schema['interfaces']:
+        if schema.interfaces:
             yield path or '/'
-        for child in schema['nodes']:
+        for child in schema.nodes:
             async for p in self.iter_paths(name, f'{path}/{child}'):
                 yield p
 
@@ -42,15 +42,15 @@ class Client:
         if not iface:
             iface = guess_iface(schema, 'methods', method)
 
-        m = schema['interfaces'][iface]['methods'][method]
+        m = schema.interfaces[iface].methods[method]
         if not sig:
-            sig = ''.join(m['in'].values())
+            sig = ''.join(m.args.values())
 
         result = await self.con.call(name, path, iface, method, (sig, params))
 
-        if len(m['out']) == 1:
+        if len(m.returns) == 1:
             return result[0]
-        elif len(m['out']) > 1:
+        elif len(m.returns) > 1:
             return result
 
     async def get_property(self, name, prop, path=None, iface=None):

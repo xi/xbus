@@ -1,4 +1,11 @@
 import xml.etree.ElementTree as ET
+from collections import namedtuple
+
+Property = namedtuple('Property', ['type', 'access'])
+Method = namedtuple('Method', ['args', 'returns'])
+Signal = namedtuple('Signal', ['args', 'returns'])
+Interface = namedtuple('Interface', ['properties', 'methods', 'signals'])
+Schema = namedtuple('Schema', ['interfaces', 'nodes'])
 
 
 def get_all(node, tag, parse):
@@ -10,34 +17,34 @@ def parse_arg(node):
 
 
 def parse_property(node):
-    return {
-        'type': node.get('type'),
-        'access': node.get('access'),
-    }
+    return Property(
+        type=node.get('type'),
+        access=node.get('access'),
+    )
 
 def parse_method(node):
-    return {
-        'in': get_all(node, './/arg[@direction="in"]', parse_arg),
-        'out': get_all(node, './/arg[@direction="out"]', parse_arg),
-    }
+    return Method(
+        get_all(node, './/arg[@direction="in"]', parse_arg),
+        get_all(node, './/arg[@direction="out"]', parse_arg),
+    )
 
 def parse_signal(node):
-    return {
-        'in': get_all(node, './/arg[@direction="in"]', parse_arg),
-        'out': get_all(node, './/arg[@direction="out"]', parse_arg),
-    }
+    return Signal(
+        get_all(node, './/arg[@direction="in"]', parse_arg),
+        get_all(node, './/arg[@direction="out"]', parse_arg),
+    )
 
 def parse_interface(node):
-    return {
-        'properties': get_all(node, 'property', parse_property),
-        'methods': get_all(node, 'method', parse_method),
-        'signals': get_all(node, 'signal', parse_signal),
-    }
+    return Interface(
+        properties=get_all(node, 'property', parse_property),
+        methods=get_all(node, 'method', parse_method),
+        signals=get_all(node, 'signal', parse_signal),
+    )
 
 
 def parse_schema(s):
     tree = ET.fromstring(s)
-    return {
-        'interfaces': get_all(tree, 'interface', parse_interface),
-        'nodes': [n.get('name') for n in tree.findall('node')],
-    }
+    return Schema(
+        interfaces=get_all(tree, 'interface', parse_interface),
+        nodes=[n.get('name') for n in tree.findall('node')],
+    )
