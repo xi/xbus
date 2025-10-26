@@ -71,7 +71,7 @@ class Connection:
     async def __aexit__(self, *args, **kwargs):
         self.sock.shutdown(socket.SHUT_RDWR)
 
-    async def call(self, dest, path, iface, method, params, flags=0):
+    async def call(self, dest, path, iface, method, params, flags=MsgFlag.NONE):
         request = Msg(
             MsgType.METHOD_CALL,
             self.get_serial(),

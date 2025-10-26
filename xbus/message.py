@@ -44,6 +44,7 @@ class MsgType(enum.IntEnum):
 
 
 class MsgFlag(enum.Flag):
+    NONE = 0x0
     NO_REPLY_EXPECTED = 0x1
     NO_AUTO_START = 0x2
     ALLOW_INTERACTIVE_AUTHORIZATION = 0x4
@@ -51,9 +52,9 @@ class MsgFlag(enum.Flag):
 
 @dataclass
 class Msg:
-    type: int
+    type: MsgType
     serial: int
-    flags: int = 0
+    flags: MsgFlag = MsgFlag.NONE
     reply_serial: int = None
     sender: str = None
     destination: str = None
@@ -79,7 +80,7 @@ class Msg:
         w.marshal('yyyyuua{yv}', [
             ENDIAN[endian],
             self.type,
-            self.flags,
+            self.flags.value,
             VERSION,
             len(w_body.buf),
             self.serial,
@@ -98,7 +99,7 @@ class Msg:
         if version != VERSION:
             raise ValueError(version)
 
-        msg = cls(type, serial, flags)
+        msg = cls(MsgType(type), serial, MsgFlag(flags))
 
         for header in Header:
             if header.value in headers:
