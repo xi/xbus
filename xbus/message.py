@@ -43,7 +43,7 @@ class MsgType(enum.IntEnum):
     SIGNAL = 4
 
 
-class Flag(enum.Flag):
+class MsgFlag(enum.Flag):
     NO_REPLY_EXPECTED = 0x1
     NO_AUTO_START = 0x2
     ALLOW_INTERACTIVE_AUTHORIZATION = 0x4

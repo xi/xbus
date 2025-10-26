@@ -3,6 +3,7 @@ import os
 import socket
 
 from .message import Msg
+from .message import MsgFlag
 from .message import MsgType
 
 
@@ -71,13 +72,9 @@ class Connection:
         self.sock.shutdown(socket.SHUT_RDWR)
 
     async def call(self, dest, path, iface, method, params, flags=0):
-        serial = self.get_serial()
-        f = self.loop.create_future()
-        self.replies[serial] = f
-
         request = Msg(
             MsgType.METHOD_CALL,
-            serial,
+            self.get_serial(),
             destination=dest,
             path=path,
             iface=iface,
@@ -86,6 +83,14 @@ class Connection:
             body=params[1],
             flags=flags,
         )
+
+        if flags & MsgFlag.NO_REPLY_EXPECTED:
+            await self.send(request.marshal())
+            return
+
+        f = self.loop.create_future()
+        self.replies[request.serial] = f
+
         await self.send(request.marshal())
 
         response = await f
