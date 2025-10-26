@@ -22,17 +22,18 @@ def parse_property(node):
         access=node.get('access'),
     )
 
+
 def parse_method(node):
+    # inout args must be included in lists
     return Method(
-        get_all(node, './/arg[@direction="in"]', parse_arg),
-        get_all(node, './/arg[@direction="out"]', parse_arg),
+        args=get_all(node, './/arg[@direction!="out"]', parse_arg),
+        returns=get_all(node, './/arg[@direction!="in"]', parse_arg),
     )
 
+
 def parse_signal(node):
-    return Signal(
-        get_all(node, './/arg[@direction="in"]', parse_arg),
-        get_all(node, './/arg[@direction="out"]', parse_arg),
-    )
+    return Signal(*parse_method(node))
+
 
 def parse_interface(node):
     return Interface(
