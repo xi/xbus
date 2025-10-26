@@ -1,28 +1,10 @@
-from collections import namedtuple
+import enum
+from dataclasses import dataclass
 
 from .marshal import Reader
 from .marshal import Writer
 
-MSG_TYPE_METHOD_CALL = 1
-MSG_TYPE_METHOD_RETURN = 2
-MSG_TYPE_ERROR = 3
-MSG_TYPE_SIGNAL = 4
-
-FLAG_NO_REPLY_EXPECTED = 0x1
-FLAG_NO_AUTO_START = 0x2
-FLAG_ALLOW_INTERACTIVE_AUTHORIZATION = 0x4
-
 VERSION = 1
-
-HEADER_PATH = 1
-HEADER_INTERFACE = 2
-HEADER_MEMBER = 3
-HEADER_ERROR_NAME = 4
-HEADER_REPLY_SERIAL = 5
-HEADER_DESTINATION = 6
-HEADER_SENDER = 7
-HEADER_SIGNATURE = 8
-HEADER_UNIX_FDS = 9
 
 ENDIAN = {
     '<': 108,
@@ -33,60 +15,99 @@ ENDIAN_REV = {
     66: '>',
 }
 
-MsgHeader = namedtuple('MsgHeader', [
-    'endian',
-    'type',
-    'flags',
-    'version',
-    'size',
-    'serial',
-    'headers',
-])
+
+class Header(enum.IntEnum):
+    path = 1
+    iface = 2
+    member = 3
+    error_name = 4
+    reply_serial = 5
+    destination = 6
+    sender = 7
+    sig = 8
+    unix_fds = 9
+
+    def get_sig(self):
+        return {
+            self.path: 'o',
+            self.reply_serial: 'u',
+            self.sig: 'g',
+            self.unix_fds: 'u',
+        }.get(self, 's')
 
 
-def unmarshal_msg(buf):
-    r = Reader(buf, ENDIAN_REV[buf[0]])
-    header = MsgHeader(*r.unmarshal('yyyyuua{yv}'))
-    r.skip_padding(8)
-    sig = header.headers.get(HEADER_SIGNATURE, ('g', ''))[1]
-    body = r.unmarshal(sig)
-    return header, body
+class MsgType(enum.IntEnum):
+    METHOD_CALL = 1
+    METHOD_RETURN = 2
+    ERROR = 3
+    SIGNAL = 4
 
 
-def marshal_msg(type, flags, serial, headers, body):
-    w_body = Writer('<')
-    sig = headers.get(HEADER_SIGNATURE, ('g', ''))[1]
-    w_body.marshal(sig, body)
-
-    w = Writer(w_body.endian)
-    w.marshal('yyyyuua{yv}', [
-        ENDIAN[w.endian],
-        type,
-        flags,
-        VERSION,
-        len(w_body.buf),
-        serial,
-        headers,
-    ])
-    w.write_padding(8)
-
-    return w.buf + w_body.buf
+class Flag(enum.Flag):
+    NO_REPLY_EXPECTED = 0x1
+    NO_AUTO_START = 0x2
+    ALLOW_INTERACTIVE_AUTHORIZATION = 0x4
 
 
-def marshal_method_call(flags, serial, dest, path, iface, method, params):
-    return marshal_msg(
-        MSG_TYPE_METHOD_CALL,
-        flags,
-        serial,
-        {
-            HEADER_DESTINATION: ('s', dest),
-            HEADER_PATH: ('o', path),
-            HEADER_INTERFACE: ('s', iface),
-            HEADER_MEMBER: ('s', method),
-            HEADER_SIGNATURE: ('g', params[0]),
-        },
-        params[1],
-    )
+@dataclass
+class Msg:
+    type: int
+    serial: int
+    flags: int = 0
+    reply_serial: int = None
+    sender: str = None
+    destination: str = None
+    path: str = None
+    iface: str = None
+    member: str = None
+    error_name: str = None
+    unix_fds: str = None
+    sig: str = ''
+    body: str = ()
 
+    def marshal(self, endian='<'):
+        w_body = Writer(endian)
+        w_body.marshal(self.sig, self.body)
 
-# print(marshal_method_call(0, 1, 'org.freedesktop.portal', '/', 'org.freedesktop.portal.Settings', 'GetAll', ('', [])))
+        headers = {}
+        for header in Header:
+            value = getattr(self, header.name)
+            if value is not None:
+                headers[header.value] = header.get_sig(), value
+
+        w = Writer(endian)
+        w.marshal('yyyyuua{yv}', [
+            ENDIAN[endian],
+            self.type,
+            self.flags,
+            VERSION,
+            len(w_body.buf),
+            self.serial,
+            headers,
+        ])
+        w.write_padding(8)
+
+        return w.buf + w_body.buf
+
+    @classmethod
+    def unmarshal(cls, buf):
+        r = Reader(buf, ENDIAN_REV[buf[0]])
+        r.offset += 1
+
+        type, flags, version, _size, serial, headers = r.unmarshal('yyyuua{yv}')
+        if version != VERSION:
+            raise ValueError(version)
+
+        msg = cls(type, serial, flags)
+
+        for header in Header:
+            if header.value in headers:
+                value = headers[header.value]
+                if value[0] != header.get_sig():
+                    raise ValueError(header, value)
+                setattr(msg, header.name, value[1])
+
+        r.skip_padding(8)
+        msg.body = r.unmarshal(msg.sig)
+
+        return msg

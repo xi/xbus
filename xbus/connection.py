@@ -2,12 +2,8 @@ import asyncio
 import os
 import socket
 
-from .message import HEADER_ERROR_NAME
-from .message import HEADER_REPLY_SERIAL
-from .message import MSG_TYPE_ERROR
-from .message import MSG_TYPE_METHOD_RETURN
-from .message import marshal_method_call
-from .message import unmarshal_msg
+from .message import Msg
+from .message import MsgType
 
 
 class DBusError(Exception):
@@ -31,11 +27,10 @@ class Connection:
     def on_read(self):
         buf = self.sock.recv(134217728)
         if buf:
-            header, body = unmarshal_msg(buf)
-            if HEADER_REPLY_SERIAL in header.headers:
-                serial = header.headers[HEADER_REPLY_SERIAL][1]
-                f = self.replies.pop(serial)
-                f.set_result((header, body))
+            msg = Msg.unmarshal(buf)
+            if msg.reply_serial is not None:
+                f = self.replies.pop(msg.reply_serial)
+                f.set_result(msg)
 
     async def send(self, data):
         await self.loop.sock_sendall(self.sock, data)
@@ -79,16 +74,27 @@ class Connection:
         serial = self.get_serial()
         f = self.loop.create_future()
         self.replies[serial] = f
-        await self.send(marshal_method_call(
-            flags, serial, dest, path, iface, method, params)
+
+        request = Msg(
+            MsgType.METHOD_CALL,
+            serial,
+            destination=dest,
+            path=path,
+            iface=iface,
+            member=method,
+            sig=params[0],
+            body=params[1],
+            flags=flags,
         )
-        header, body = await f
-        if header.type == MSG_TYPE_METHOD_RETURN:
-            return body
-        elif header.type == MSG_TYPE_ERROR:
-            raise DBusError(header.headers.get(HEADER_ERROR_NAME))
+        await self.send(request.marshal())
+
+        response = await f
+        if response.type == MsgType.METHOD_RETURN:
+            return response.body
+        elif response.type == MsgType.ERROR:
+            raise DBusError(response.error_name)
         else:
-            raise ValueError(header.type)
+            raise ValueError(response.type)
 
 
 def get_connection(bus):

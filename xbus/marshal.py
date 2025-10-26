@@ -130,8 +130,8 @@ class Reader:
         else:
             raise ValueError(type)
 
-    def unmarshal(self, signature):
-        sig = parse(signature)
+    def unmarshal(self, sig):
+        sig = parse(sig)
         return [self.read(t) for t in sig]
 
 
@@ -187,8 +187,8 @@ class Writer:
         else:
             raise ValueError(type)
 
-    def marshal(self, signature, data):
-        sig = parse(signature)
+    def marshal(self, sig, data):
+        sig = parse(sig)
         for t, value in zip(sig, data, strict=True):
             self.write(t, value)
 
