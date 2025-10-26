@@ -2,9 +2,16 @@ import asyncio
 import os
 import socket
 
-from message import HEADER_REPLY_SERIAL
-from message import marshal_method_call
-from message import unmarshal_msg
+from .message import HEADER_ERROR_NAME
+from .message import HEADER_REPLY_SERIAL
+from .message import MSG_TYPE_ERROR
+from .message import MSG_TYPE_METHOD_RETURN
+from .message import marshal_method_call
+from .message import unmarshal_msg
+
+
+class DBusError(Exception):
+    pass
 
 
 class Connection:
@@ -75,4 +82,18 @@ class Connection:
         await self.send(marshal_method_call(
             flags, serial, dest, path, iface, method, params)
         )
-        return await f
+        header, body = await f
+        if header.type == MSG_TYPE_METHOD_RETURN:
+            return body
+        elif header.type == MSG_TYPE_ERROR:
+            raise DBusError(header.headers.get(HEADER_ERROR_NAME))
+        else:
+            raise ValueError(header.type)
+
+
+def get_connection(bus):
+    if bus == 'session':
+        addr = '/run/user/1000/bus'
+    else:
+        addr = '/run/dbus/system_bus_socket'
+    return Connection(addr)

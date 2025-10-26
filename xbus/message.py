@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-from xbus.marshal import Reader
-from xbus.marshal import Writer
+from .marshal import Reader
+from .marshal import Writer
 
 MSG_TYPE_METHOD_CALL = 1
 MSG_TYPE_METHOD_RETURN = 2
