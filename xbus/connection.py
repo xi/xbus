@@ -76,17 +76,3 @@ class Connection:
             flags, serial, dest, path, iface, method, params)
         )
         return await f
-
-
-async def amain():
-    async with Connection() as con:
-        print(await con.call(
-            'org.freedesktop.portal.Desktop',
-            '/org/freedesktop/portal',
-            'org.freedesktop.portal.Settings',
-            'ReadOne',
-            ('ss', ('org.freedesktop.appearance', 'color-scheme')),
-        ))
-
-
-asyncio.run(amain())
