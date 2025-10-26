@@ -25,14 +25,12 @@ class Header(enum.IntEnum):
     destination = 6
     sender = 7
     sig = 8
-    unix_fds = 9
 
     def get_sig(self):
         return {
             self.path: 'o',
             self.reply_serial: 'u',
             self.sig: 'g',
-            self.unix_fds: 'u',
         }.get(self, 's')
 
 
@@ -62,7 +60,6 @@ class Msg:
     iface: str = None
     member: str = None
     error_name: str = None
-    unix_fds: str = None
     sig: str = ''
     body: str = ()
 
@@ -76,6 +73,9 @@ class Msg:
             if value is not None:
                 headers[header.value] = header.get_sig(), value
 
+        if w_body.fds:
+            headers[9] = 'u', len(w_body.fds)
+
         w = Writer(endian)
         w.marshal('yyyyuua{yv}', [
             ENDIAN[endian],
@@ -88,11 +88,11 @@ class Msg:
         ])
         w.write_padding(8)
 
-        return w.buf + w_body.buf
+        return w.buf + w_body.buf, w_body.fds
 
     @classmethod
-    def unmarshal(cls, buf):
-        r = Reader(buf, ENDIAN_REV[buf[0]])
+    def unmarshal(cls, buf, fds):
+        r = Reader(buf, fds, ENDIAN_REV[buf[0]])
         r.offset += 1
 
         type, flags, version, _size, serial, headers = r.unmarshal('yyyuua{yv}')

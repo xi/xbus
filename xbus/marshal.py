@@ -74,9 +74,10 @@ def get_align(type):
 
 
 class Reader:
-    def __init__(self, buf, endian):
-        self.endian = endian
+    def __init__(self, buf, fds, endian):
         self.buf = buf
+        self.fds = fds
+        self.endian = endian
         self.offset = 0
 
     def skip_padding(self, align):
@@ -119,7 +120,8 @@ class Reader:
         elif type in ['s', 'o', 'g']:
             return self._read_str(type)
         elif type == 'h':  # file descriptor
-            raise NotImplementedError
+            i = self.read('u')
+            return self.fds[i]
         elif type == 'v':
             sig = self.read('g')
             t = parse(sig)[0]
@@ -137,8 +139,9 @@ class Reader:
 
 class Writer:
     def __init__(self, endian):
-        self.endian = endian
         self.buf = b''
+        self.fds = []
+        self.endian = endian
 
     def write_padding(self, align):
         if not isinstance(align, int):
@@ -176,7 +179,8 @@ class Writer:
         elif type in ['s', 'o', 'g']:
             self._write_str(type, value)
         elif type == 'h':  # file descriptor
-            raise NotImplementedError
+            self.write('u', len(self.fds))
+            self.fds.append(value.fileno())
         elif type == 'v':
             sig, v = value
             self.write('g', sig)

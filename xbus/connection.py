@@ -17,6 +17,7 @@ class Connection:
         self.addr = addr
         self.loop = loop
         self.serial = 0
+        self.queue = []
         self.replies = {}
         self.signal_queues = set()
 
@@ -28,9 +29,9 @@ class Connection:
         return self.serial
 
     def on_read(self):
-        buf = self.sock.recv(134217728)
+        buf, fds, _, _ = socket.recv_fds(self.sock, 134217728, 255)
         if buf:
-            msg = Msg.unmarshal(buf)
+            msg = Msg.unmarshal(buf, fds)
             if msg.reply_serial is not None:
                 f = self.replies.pop(msg.reply_serial)
                 f.set_result(msg)
@@ -40,8 +41,20 @@ class Connection:
             else:
                 raise ValueError(msg)
 
-    async def send(self, data):
-        await self.loop.sock_sendall(self.sock, data)
+    def on_write(self):
+        if self.queue:
+            buf, fds, f = self.queue.pop(0)
+            socket.send_fds(self.sock, [buf], fds)
+            f.set_result(None)
+        else:
+            self.loop.remove_writer(self.sock.fileno())
+
+    async def send(self, buf, fds=[]):
+        if not self.queue:
+            self.loop.add_writer(self.sock.fileno(), self.on_write)
+        f = self.loop.create_future()
+        self.queue.append((buf, fds, f))
+        await f
 
     async def recv(self, nbytes):
         return await self.loop.sock_recv(self.sock, nbytes)
@@ -102,13 +115,13 @@ class Connection:
         )
 
         if flags & MsgFlag.NO_REPLY_EXPECTED:
-            await self.send(request.marshal())
+            await self.send(*request.marshal())
             return
 
         f = self.loop.create_future()
         self.replies[request.serial] = f
 
-        await self.send(request.marshal())
+        await self.send(*request.marshal())
 
         response = await f
         if response.type == MsgType.METHOD_RETURN:

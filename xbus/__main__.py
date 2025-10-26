@@ -24,6 +24,13 @@ async def amain():
             path='/org/freedesktop/secrets'
         ))
 
+        with open(__file__) as fh:
+            print(await c.call(
+                'org.freedesktop.portal.Desktop',
+                'OpenFile',
+                ['', fh, {}],
+            ))
+
         async with c.signal(
             'org.freedesktop.portal.Desktop', 'SettingChanged'
         ) as queue:
