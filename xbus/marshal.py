@@ -195,12 +195,3 @@ class Writer:
         sig = parse(sig)
         for t, value in zip(sig, data, strict=True):
             self.write(t, value)
-
-
-# for sig, value, endian, expected in [
-#     ('sss', ['foo', '+', 'bar'], '<', b'\x03\x00\x00\x00\x66\x6f\x6f\x00\x01\x00\x00\x00\x2b\x00\x00\x00\x03\x00\x00\x00\x62\x61\x72\x00'),
-#     ('at', [[5]], '>', b'\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05'),
-#     ('v', [('t', 5)], '>', b'\x01\x74\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05'),
-# ]:
-#     assert marshal(sig, value, endian) == expected
-#     assert unmarshal(sig, expected, endian) == value
