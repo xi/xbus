@@ -1,6 +1,7 @@
 import asyncio
 import os
 import socket
+from contextlib import contextmanager
 
 from .message import Msg
 from .message import MsgFlag
@@ -17,6 +18,7 @@ class Connection:
         self.loop = loop
         self.serial = 0
         self.replies = {}
+        self.signal_queues = set()
 
         if not self.loop:
             self.loop = asyncio.get_running_loop()
@@ -32,6 +34,11 @@ class Connection:
             if msg.reply_serial is not None:
                 f = self.replies.pop(msg.reply_serial)
                 f.set_result(msg)
+            elif msg.type == MsgType.SIGNAL:
+                for queue in self.signal_queues:
+                    queue.put_nowait(msg)
+            else:
+                raise ValueError(msg)
 
     async def send(self, data):
         await self.loop.sock_sendall(self.sock, data)
@@ -70,6 +77,16 @@ class Connection:
 
     async def __aexit__(self, *args, **kwargs):
         self.sock.shutdown(socket.SHUT_RDWR)
+
+    @contextmanager
+    def signal_queue(self):
+        queue = asyncio.Queue()
+        self.signal_queues.add(queue)
+        try:
+            yield queue
+        finally:
+            self.signal_queues.remove(queue)
+            queue.shutdown()
 
     async def call(self, dest, path, iface, method, params, flags=MsgFlag.NONE):
         request = Msg(

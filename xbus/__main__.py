@@ -24,6 +24,12 @@ async def amain():
             path='/org/freedesktop/secrets'
         ))
 
+        async with c.signal(
+            'org.freedesktop.portal.Desktop', 'SettingChanged'
+        ) as queue:
+            async for value in queue:
+                print(value)
+
 
 if __name__ == '__main__':
     asyncio.run(amain())
