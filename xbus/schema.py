@@ -3,7 +3,7 @@ from collections import namedtuple
 
 Property = namedtuple('Property', ['type', 'access'])
 Method = namedtuple('Method', ['args', 'returns'])
-Signal = namedtuple('Signal', ['args', 'returns'])
+Signal = namedtuple('Signal', ['args'])
 Interface = namedtuple('Interface', ['properties', 'methods', 'signals'])
 Schema = namedtuple('Schema', ['interfaces', 'nodes'])
 
@@ -32,7 +32,7 @@ def parse_method(node):
 
 
 def parse_signal(node):
-    return Signal(*parse_method(node))
+    return Signal(args=get_all(node, 'arg', parse_arg))
 
 
 def parse_interface(node):
