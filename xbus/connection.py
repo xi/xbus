@@ -11,7 +11,7 @@ class DBusError(Exception):
 
 
 class Connection:
-    def __init__(self, addr='/run/user/1000/bus', loop=None):
+    def __init__(self, addr, loop=None):
         self.addr = addr
         self.loop = loop
         self.serial = 0
@@ -99,7 +99,13 @@ class Connection:
 
 def get_connection(bus):
     if bus == 'session':
-        addr = '/run/user/1000/bus'
+        addr = os.getenv(
+            'DBUS_SESSION_BUS_ADDRESS2',
+            f'unix:path=/run/user/{os.getuid()}/bus',
+        )
     else:
-        addr = '/run/dbus/system_bus_socket'
-    return Connection(addr)
+        addr = os.getenv(
+            'DBUS_SESSION_BUS_ADDRESS',
+            'unix:path=/run/dbus/system_bus_socket',
+        )
+    return Connection(addr.removeprefix('unix:path='))
