@@ -25,7 +25,7 @@ async def amain():
         ))
 
         with open(__file__) as fh:
-            print(await c.call(
+            print(await c.portal_call(
                 'org.freedesktop.portal.Desktop',
                 'OpenFile',
                 ['', fh, {}],

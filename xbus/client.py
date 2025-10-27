@@ -1,4 +1,5 @@
 import contextlib
+import random
 
 from .schema import parse_schema
 
@@ -128,3 +129,19 @@ class Client:
                     'RemoveMatch',
                     ('s', [s.rule]),
                 )
+
+    async def portal_call(self, name, method, params=(), path=None, iface=None):
+        sender = self.con.unique_name.replace('.', '_')[1:]
+        token = str(random.randint(1_000_000_000, 10_000_000_000))
+        params[-1]['handle_token'] = ('s', token)
+        request_path = f'/org/freedesktop/portal/desktop/request/{sender}/{token}'
+
+        async with self.signal(
+            name,
+            'Response',
+            path=request_path,
+            iface='org.freedesktop.portal.Request',
+        ) as queue:
+            await self.call(name, method, params, path=path, iface=iface)
+            async for data in queue:
+                return data
