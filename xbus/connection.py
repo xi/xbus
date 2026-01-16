@@ -135,12 +135,12 @@ class Connection:
 def get_connection(bus):
     if bus == 'session':
         addr = os.getenv(
-            'DBUS_SESSION_BUS_ADDRESS2',
+            'DBUS_SESSION_BUS_ADDRESS',
             f'unix:path=/run/user/{os.getuid()}/bus',
         )
     else:
         addr = os.getenv(
-            'DBUS_SESSION_BUS_ADDRESS',
+            'DBUS_SYSTEM_BUS_ADDRESS',
             'unix:path=/run/dbus/system_bus_socket',
         )
     return Connection(addr.removeprefix('unix:path='))
