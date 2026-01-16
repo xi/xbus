@@ -17,7 +17,7 @@ class Connection:
         self.addr = addr
         self.loop = loop
         self.serial = 0
-        self.queue = []
+        self.send_queue = []
         self.replies = {}
         self.signal_queues = set()
 
@@ -42,18 +42,18 @@ class Connection:
                 raise ValueError(msg)
 
     def on_write(self):
-        if self.queue:
-            buf, fds, future = self.queue.pop(0)
+        if self.send_queue:
+            buf, fds, future = self.send_queue.pop(0)
             socket.send_fds(self.sock, [buf], fds)
             future.set_result(None)
         else:
             self.loop.remove_writer(self.sock.fileno())
 
     async def send(self, buf, fds=[]):
-        if not self.queue:
+        if not self.send_queue:
             self.loop.add_writer(self.sock.fileno(), self.on_write)
         future = self.loop.create_future()
-        self.queue.append((buf, fds, future))
+        self.send_queue.append((buf, fds, future))
         await future
 
     async def recv(self, nbytes):
