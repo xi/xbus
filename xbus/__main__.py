@@ -1,12 +1,10 @@
 import asyncio
 
-from .client import Client
-from .connection import get_connection
+from . import get_client
 
 
 async def amain():
-    async with get_connection('session') as con:
-        c = Client(con)
+    async with get_client('session') as c:
         print(await c.call(
             'org.freedesktop.portal.Desktop',
             'ReadOne',
