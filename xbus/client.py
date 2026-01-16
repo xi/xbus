@@ -4,13 +4,6 @@ import random
 from .schema import parse_schema
 
 
-def guess_iface(schema, key, value):
-    for iface, s in schema.interfaces.items():
-        if value in getattr(s, key):
-            return iface
-    raise ValueError(value)
-
-
 class Signal:
     def __init__(self, queue, name, path, iface, signal):
         self.queue = queue
@@ -63,19 +56,29 @@ class Client:
             async for p in self.iter_paths(name, f'{path}/{child}'):
                 yield p
 
-    async def guess_path(self, name):
+    async def guess_iface(self, name, key, value, path, iface=None):
+        if iface:
+            return iface
+        schema = await self.introspect(name, path)
+        for iface, s in schema.interfaces.items():
+            if value in getattr(s, key):
+                return iface
+        raise ValueError((name, key, value, path))
+
+    async def guess_path(self, name, key, value, path=None, iface=None):
+        if path:
+            return path, await self.guess_iface(name, key, value, path, iface)
         async for path in self.iter_paths(name):
-            return path
-        raise ValueError(name)
+            try:
+                return path, await self.guess_iface(name, key, value, path, iface)
+            except ValueError:
+                pass
+        raise ValueError((name, key, value))
 
     async def call(self, name, method, params=(), path=None, iface=None, sig=None):
-        if not path:
-            path = await self.guess_path(name)
+        path, iface = await self.guess_path(name, 'methods', method, path, iface)
 
         schema = await self.introspect(name, path)
-        if not iface:
-            iface = guess_iface(schema, 'methods', method)
-
         m = schema.interfaces[iface].methods[method]
         if not sig:
             sig = ''.join(m.args.values())
@@ -88,25 +91,14 @@ class Client:
             return result
 
     async def get_property(self, name, prop, path=None, iface=None):
-        if not path:
-            path = await self.guess_path(name)
-
-        schema = await self.introspect(name, path)
-        if not iface:
-            iface = guess_iface(schema, 'properties', prop)
-
+        path, iface = await self.guess_path(name, 'properties', prop, path, iface)
         iprop = 'org.freedesktop.DBus.Properties'
         result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
         return result[0]
 
     @contextlib.asynccontextmanager
     async def signal(self, name, signal, path=None, iface=None):
-        if not path:
-            path = await self.guess_path(name)
-
-        schema = await self.introspect(name, path)
-        if not iface:
-            iface = guess_iface(schema, 'signals', signal)
+        path, iface = await self.guess_path(name, 'signals', signal, path, iface)
 
         with self.con.signal_queue() as queue:
             s = Signal(queue, name, path, iface, signal)
