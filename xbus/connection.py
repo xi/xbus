@@ -33,8 +33,8 @@ class Connection:
         if buf:
             msg = Msg.unmarshal(buf, fds)
             if msg.reply_serial is not None:
-                f = self.replies.pop(msg.reply_serial)
-                f.set_result(msg)
+                future = self.replies.pop(msg.reply_serial)
+                future.set_result(msg)
             elif msg.type == MsgType.SIGNAL:
                 for queue in self.signal_queues:
                     queue.put_nowait(msg)
@@ -43,18 +43,18 @@ class Connection:
 
     def on_write(self):
         if self.queue:
-            buf, fds, f = self.queue.pop(0)
+            buf, fds, future = self.queue.pop(0)
             socket.send_fds(self.sock, [buf], fds)
-            f.set_result(None)
+            future.set_result(None)
         else:
             self.loop.remove_writer(self.sock.fileno())
 
     async def send(self, buf, fds=[]):
         if not self.queue:
             self.loop.add_writer(self.sock.fileno(), self.on_write)
-        f = self.loop.create_future()
-        self.queue.append((buf, fds, f))
-        await f
+        future = self.loop.create_future()
+        self.queue.append((buf, fds, future))
+        await future
 
     async def recv(self, nbytes):
         return await self.loop.sock_recv(self.sock, nbytes)
@@ -118,12 +118,12 @@ class Connection:
             await self.send(*request.marshal())
             return
 
-        f = self.loop.create_future()
-        self.replies[request.serial] = f
+        future = self.loop.create_future()
+        self.replies[request.serial] = future
 
         await self.send(*request.marshal())
 
-        response = await f
+        response = await future
         if response.type == MsgType.METHOD_RETURN:
             return response.body
         elif response.type == MsgType.ERROR:
