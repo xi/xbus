@@ -180,7 +180,10 @@ class Writer:
             self._write_str(type, value)
         elif type == 'h':  # file descriptor
             self.write('u', len(self.fds))
-            self.fds.append(value.fileno())
+            if isinstance(value, int):
+                self.fds.append(value)
+            else:
+                self.fds.append(value.fileno())
         elif type == 'v':
             sig, v = value
             self.write('g', sig)
