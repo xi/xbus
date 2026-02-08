@@ -127,7 +127,10 @@ class Connection:
         if response.type == MsgType.METHOD_RETURN:
             return response.body
         elif response.type == MsgType.ERROR:
-            raise DBusError(response.error_name)
+            e = DBusError(response.error_name)
+            if response.body and isinstance(response.body[0], str):
+                e.add_note(response.body[0])
+            raise e
         else:
             raise ValueError(response.type)
 
