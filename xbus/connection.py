@@ -78,7 +78,7 @@ class Connection:
 
         self.loop.add_reader(self.sock.fileno(), self.on_read)
 
-        self.unique_name, = await self.call(
+        (self.unique_name,) = await self.call(
             'org.freedesktop.DBus',
             '/org/freedesktop/DBus',
             'org.freedesktop.DBus',

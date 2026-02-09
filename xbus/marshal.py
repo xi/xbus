@@ -15,10 +15,7 @@ TYPES = {
 
 
 def is_container(type, t):
-    return (
-        isinstance(type, types.GenericAlias)
-        and type.__origin__ is t
-    )
+    return isinstance(type, types.GenericAlias) and type.__origin__ is t
 
 
 def parse_many(i, close=None):
@@ -90,7 +87,7 @@ class Reader:
             size = self.read('y')
         else:
             size = self.read('u')
-        b, = struct.unpack_from(f'{size}s', buffer=self.buf, offset=self.offset)
+        (b,) = struct.unpack_from(f'{size}s', buffer=self.buf, offset=self.offset)
         self.offset += size + 1
         return b.decode('utf-8')
 
@@ -114,7 +111,7 @@ class Reader:
         self.skip_padding(type)
         if type in TYPES:
             format = f'{self.endian}{TYPES[type]}'
-            value, = struct.unpack_from(format, buffer=self.buf, offset=self.offset)
+            (value,) = struct.unpack_from(format, buffer=self.buf, offset=self.offset)
             self.offset += struct.calcsize(format)
             return value
         elif type in ['s', 'o', 'g']:

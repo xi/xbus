@@ -12,12 +12,7 @@ async def amain():
             'ReadOne',
             ('org.freedesktop.appearance', 'color-scheme'),
         ))
-        print(await c.call(
-            'org.freedesktop.DBus',
-            None,
-            None,
-            'ListNames',
-        ))
+        print(await c.call('org.freedesktop.DBus', None, None, 'ListNames'))
         async for path in c.iter_paths('org.freedesktop.secrets'):
             print(path)
         print(await c.get_property(

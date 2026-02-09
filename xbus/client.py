@@ -44,7 +44,7 @@ class Client:
         key = f'{name}{path}'
         if key not in self.introspect_cache:
             iface = 'org.freedesktop.DBus.Introspectable'
-            xml, = await self.con.call(name, path, iface, 'Introspect', ('', []))
+            (xml,) = await self.con.call(name, path, iface, 'Introspect', ('', []))
             self.introspect_cache[key] = parse_schema(xml)
         return self.introspect_cache[key]
 
