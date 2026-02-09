@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import socket
 from contextlib import contextmanager
 
@@ -7,8 +8,14 @@ from .message import Msg
 from .message import MsgFlag
 from .message import MsgType
 
+RE_PATH = re.compile(r'^/[A-Za-z0-9_/]*$')
+
 
 class DBusError(Exception):
+    pass
+
+
+class InvalidPathError(ValueError):
     pass
 
 
@@ -103,6 +110,9 @@ class Connection:
             queue.shutdown()
 
     async def call(self, dest, path, iface, method, params, flags=MsgFlag.NONE):
+        if not RE_PATH.match(path):
+            raise InvalidPathError(path)
+
         request = Msg(
             MsgType.METHOD_CALL,
             self.get_serial(),
