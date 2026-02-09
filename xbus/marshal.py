@@ -1,5 +1,5 @@
 import struct
-import types
+from dataclasses import dataclass
 
 TYPES = {
     'y': 'b',  # byte
@@ -13,60 +13,65 @@ TYPES = {
     'd': 'd',  # float
 }
 
-
-def is_container(type, t):
-    return isinstance(type, types.GenericAlias) and type.__origin__ is t
-
-
-def parse_many(i, close=None):
-    values = []
-    while True:
-        v = parse_single(i)
-        if v == close:
-            return values
-        else:
-            values.append(v)
+@dataclass
+class DictItem:
+    key: str
+    value: str
 
 
-def parse_single(i):
-    c = next(i)
+@dataclass
+class List:
+    value: str
+
+
+def _parse_single(sig_iter):
+    c = next(sig_iter)
     try:
         if c == '(':
-            return tuple[*parse_many(i, ')')]
+            values = []
+            while True:
+                v = _parse_single(sig_iter)
+                if v == ')':
+                    break
+                values.append(v)
+            return tuple(values)
         elif c == '{':
-            # TODO: validate
-            return dict[*parse_many(i, '}')]
+            key = _parse_single(sig_iter)
+            value = _parse_single(sig_iter)
+            if next(sig_iter) != '}':
+                raise ValueError
+            return DictItem(key, value)
         elif c == 'a':
-            return list[parse_single(i)]
+            return List(_parse_single(sig_iter))
         else:
             return c
     except StopIteration as e:
         raise ValueError from e
 
 
-def parse(s):
-    i = iter(s)
+def parse(sig):
+    sig_iter = iter(sig)
     values = []
     try:
         while True:
-            values.append(parse_single(i))
+            values.append(_parse_single(sig_iter))
+    except ValueError as e:
+        raise ValueError(sig) from e
     except StopIteration:
         return values
-    except ValueError as e:
-        raise ValueError(s) from e
 
 
 def get_align(type):
-    if type in TYPES:
-        return struct.calcsize(TYPES[type])
+    if isinstance(type, List):
+        return 4
+    elif isinstance(type, (DictItem, tuple)):
+        return 8
+    elif type in TYPES:
+        return struct.calcsize(f'={TYPES[type]}')
     elif type in ['g', 'v']:
         return 1
     elif type in ['s', 'o', 'h']:
         return 4
-    elif is_container(type, list):
-        return 4
-    elif is_container(type, tuple) or is_container(type, dict):
-        return 8
     raise ValueError(type)
 
 
@@ -91,25 +96,26 @@ class Reader:
         self.offset += size + 1
         return b.decode('utf-8')
 
-    def _read_container(self, type):
-        if is_container(type, tuple) or is_container(type, dict):
-            return [self.read(t) for t in type.__args__]
-        elif is_container(type, list):
-            size = self.read('u')
-            self.skip_padding(type.__args__[0])
-            end = self.offset + size
-            arr = []
-            while self.offset < end:
-                arr.append(self.read(type.__args__[0]))
-            if is_container(type.__args__[0], dict):
-                return dict(arr)
-            return arr
-        else:
-            raise ValueError(type)
+    def _read_list(self, value_type):
+        size = self.read('u')
+        self.skip_padding(value_type)
+        end = self.offset + size
+        arr = []
+        while self.offset < end:
+            arr.append(self.read(value_type))
+        if isinstance(value_type, DictItem):
+            return dict(arr)
+        return arr
 
     def read(self, type):
         self.skip_padding(type)
-        if type in TYPES:
+        if isinstance(type, List):
+            return self._read_list(type.value)
+        elif isinstance(type, DictItem):
+            return self.read(type.key), self.read(type.value)
+        elif isinstance(type, tuple):
+            return tuple([self.read(t) for t in type])
+        elif type in TYPES:
             format = f'{self.endian}{TYPES[type]}'
             (value,) = struct.unpack_from(format, buffer=self.buf, offset=self.offset)
             self.offset += struct.calcsize(format)
@@ -121,17 +127,15 @@ class Reader:
             return self.fds[i]
         elif type == 'v':
             sig = self.read('g')
-            t = parse(sig)[0]
+            (t,) = parse(sig)
             v = self.read(t)
             return (sig, v)
-        elif isinstance(type, types.GenericAlias):
-            return self._read_container(type)
         else:
             raise ValueError(type)
 
     def unmarshal(self, sig):
         sig = parse(sig)
-        return [self.read(t) for t in sig]
+        return tuple([self.read(t) for t in sig])
 
 
 class Writer:
@@ -151,43 +155,41 @@ class Writer:
             self.write('y', len(b))
         else:
             self.write('u', len(b))
-        self.buf += struct.pack(f'{len(b) + 1}s', b)
+        self.buf += struct.pack(f'{self.endian}{len(b) + 1}s', b)
 
-    def _write_container(self, type, value):
-        if is_container(type, tuple) or is_container(type, dict):
-            for t, v in zip(type.__args__, value, strict=True):
-                self.write(t, v)
-        elif is_container(type, list):
-            if is_container(type.__args__[0], dict):
-                value = value.items()
-            m = Writer(self.endian)
-            for v in value:
-                m.write(type.__args__[0], v)
-            self.write('u', len(m.buf))
-            self.write_padding(type.__args__[0])
-            self.buf += m.buf
-        else:
-            raise ValueError(type)
+    def _write_list(self, value_type, value):
+        if isinstance(value_type, DictItem):
+            value = value.items()
+        subwriter = Writer(self.endian)
+        for v in value:
+            subwriter.write(value_type, v)
+        self.write('u', len(subwriter.buf))
+        self.write_padding(value_type)
+        self.buf += subwriter.buf
 
     def write(self, type, value):
         self.write_padding(type)
-        if type in TYPES:
+        if isinstance(type, List):
+            self._write_list(type.value, value)
+        elif isinstance(type, DictItem):
+            k, v = value
+            self.write(type.key, k)
+            self.write(type.value, v)
+        elif isinstance(type, tuple):
+            for t, v in zip(type, value, strict=True):
+                self.write(t, v)
+        elif type in TYPES:
             self.buf += struct.pack(f'{self.endian}{TYPES[type]}', value)
         elif type in ['s', 'o', 'g']:
             self._write_str(type, value)
         elif type == 'h':  # file descriptor
             self.write('u', len(self.fds))
-            if isinstance(value, int):
-                self.fds.append(value)
-            else:
-                self.fds.append(value.fileno())
+            self.fds.append(value if isinstance(value, int) else value.fileno())
         elif type == 'v':
             sig, v = value
+            (t,) = parse(sig)
             self.write('g', sig)
-            for t, value in zip(parse(sig), [v], strict=True):
-                self.write(t, value)
-        elif isinstance(type, types.GenericAlias):
-            self._write_container(type, value)
+            self.write(t, v)
         else:
             raise ValueError(type)
 
