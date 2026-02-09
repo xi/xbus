@@ -33,8 +33,9 @@ class Connection:
         if buf:
             msg = Msg.unmarshal(buf, fds)
             if msg.reply_serial is not None:
-                future = self.replies.pop(msg.reply_serial)
-                future.set_result(msg)
+                if msg.reply_serial in self.replies:
+                    future = self.replies.pop(msg.reply_serial)
+                    future.set_result(msg)
             elif msg.type == MsgType.SIGNAL:
                 for queue in self.signal_queues:
                     queue.put_nowait(msg)
@@ -121,9 +122,12 @@ class Connection:
         future = self.loop.create_future()
         self.replies[request.serial] = future
 
-        await self.send(*request.marshal())
+        try:
+            await self.send(*request.marshal())
+            response = await future
+        finally:
+            self.replies.pop(request.serial, None)
 
-        response = await future
         if response.type == MsgType.METHOD_RETURN:
             return response.body
         elif response.type == MsgType.ERROR:
