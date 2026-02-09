@@ -1,14 +1,14 @@
 import asyncio
 
 from . import get_client
+from .client import Proxy
 
 
 async def amain():
     async with get_client('session') as c:
-        print(await c.call(
-            'org.freedesktop.portal.Desktop',
-            None,
-            None,
+        desktop_proxy = Proxy(c, 'org.freedesktop.portal.Desktop')
+
+        print(await desktop_proxy.call(
             'ReadOne',
             ('org.freedesktop.appearance', 'color-scheme'),
         ))
@@ -23,17 +23,12 @@ async def amain():
         ))
 
         with open(__file__) as fh:
-            print(await c.portal_call(
-                'org.freedesktop.portal.Desktop',
-                None,
-                None,
+            print(await desktop_proxy.portal_call(
                 'OpenFile',
                 ['', fh, {}],
             ))
 
-        async with c.signal(
-            'org.freedesktop.portal.Desktop', None, None, 'SettingChanged'
-        ) as queue:
+        async with desktop_proxy.signal('SettingChanged') as queue:
             async for value in queue:
                 print(value)
 

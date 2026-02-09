@@ -35,6 +35,26 @@ class Signal:
                 yield msg.body
 
 
+class Proxy:
+    def __init__(self, client, name, path=None, iface=None):
+        self.client = client
+        self.defaults = (name, path, iface)
+
+    async def call(self, method, params=(), sig=None):
+        return await self.client.call(*self.defaults, method, params, sig)
+
+    async def get_property(self, prop):
+        return await self.client.get_property(*self.defaults, prop)
+
+    @contextlib.asynccontextmanager
+    async def signal(self, signal):
+        async with self.client.signal(*self.defaults, signal) as queue:
+            yield queue
+
+    async def portal_call(self, method, params=()):
+        return await self.client.portal_call(*self.defaults, method, params)
+
+
 class Client:
     def __init__(self, con):
         self.con = con
