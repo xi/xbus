@@ -24,17 +24,19 @@ async def amain():
         # call a method
         print(await c.call(
             'org.freedesktop.portal.Desktop',
+            '/org/freedesktop/portal/desktop',
+            'org.freedesktop.portal.Settings',
             'ReadOne',
             ('org.freedesktop.appearance', 'color-scheme'),
-            path='/org/freedesktop/portal/desktop',
-            iface='org.freedesktop.portal.Settings',
-            sig='ss',
+            'ss',
         ))
 
         # if path, interface, or signature are omitted,
         # they will be inferred from introspection
         print(await c.call(
             'org.freedesktop.portal.Desktop',
+            None,
+            None,
             'ReadOne',
             ('org.freedesktop.appearance', 'color-scheme'),
         ))
@@ -42,12 +44,18 @@ async def amain():
         # get a property
         print(await c.get_property(
             'org.freedesktop.portal.Desktop',
+            None,
+            'org.freedesktop.portal.Settings',
             'version',
-            iface='org.freedesktop.portal.Settings',
         ))
 
         # receive signals
-        async with c.signal('org.freedesktop.portal.Desktop', 'SettingChanged') as queue:
+        async with c.signal(
+            'org.freedesktop.portal.Desktop',
+            None,
+            None,
+            'SettingChanged',
+        ) as queue:
             async for signal in queue:
                 print(signal)
 
@@ -55,6 +63,8 @@ async def amain():
         # so there is a special way to call them
         await c.portal_call(
             'org.freedesktop.portal.Desktop',
+            None,
+            None,
             'OpenURI',
             ['', 'https://example.com', {}],
         )
@@ -63,6 +73,8 @@ async def amain():
         with open(__file__) as fh:
             await c.portal_call(
                 'org.freedesktop.portal.Desktop',
+                None,
+                None,
                 'OpenFile',
                 ['', fh, {}],
             )

@@ -75,7 +75,7 @@ class Client:
                 pass
         raise ValueError((name, key, value))
 
-    async def call(self, name, method, params=(), path=None, iface=None, sig=None):
+    async def call(self, name, path, iface, method, params=(), sig=None):
         path, iface = await self.guess_path(name, 'methods', method, path, iface)
 
         schema = await self.introspect(name, path)
@@ -90,14 +90,14 @@ class Client:
         elif len(m.returns) > 1:
             return result
 
-    async def get_property(self, name, prop, path=None, iface=None):
+    async def get_property(self, name, path, iface, prop):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
         iprop = 'org.freedesktop.DBus.Properties'
         result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
         return result[0]
 
     @contextlib.asynccontextmanager
-    async def signal(self, name, signal, path=None, iface=None):
+    async def signal(self, name, path, iface, signal):
         path, iface = await self.guess_path(name, 'signals', signal, path, iface)
 
         with self.con.signal_queue() as queue:
@@ -122,7 +122,7 @@ class Client:
                     ('s', [s.rule]),
                 )
 
-    async def portal_call(self, name, method, params=(), path=None, iface=None):
+    async def portal_call(self, name, path, iface, method, params=()):
         sender = self.con.unique_name.replace('.', '_')[1:]
         token = str(random.randint(1_000_000_000, 10_000_000_000))
         params[-1]['handle_token'] = ('s', token)
@@ -130,10 +130,10 @@ class Client:
 
         async with self.signal(
             name,
+            request_path,
+            'org.freedesktop.portal.Request',
             'Response',
-            path=request_path,
-            iface='org.freedesktop.portal.Request',
         ) as queue:
-            await self.call(name, method, params, path=path, iface=iface)
+            await self.call(name, path, iface, method, params)
             async for data in queue:
                 return data
