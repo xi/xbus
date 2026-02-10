@@ -70,6 +70,8 @@ class Msg:
         headers = {}
         for header in Header:
             value = getattr(self, header.name)
+            if header is Header.sig and not value:
+                continue
             if value is not None:
                 headers[header.value] = header.get_sig(), value
 
