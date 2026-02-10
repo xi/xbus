@@ -52,8 +52,11 @@ class Connection:
     def on_write(self):
         if self.send_queue:
             buf, fds, future = self.send_queue.pop(0)
-            socket.send_fds(self.sock, [buf], fds)
-            future.set_result(None)
+            size = socket.send_fds(self.sock, [buf], fds)
+            if size < len(buf):
+                self.send_queue.insert(0, (buf[size:], [], future))
+            else:
+                future.set_result(None)
         else:
             self.loop.remove_writer(self.sock.fileno())
 
