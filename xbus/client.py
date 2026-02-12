@@ -43,13 +43,20 @@ class Proxy:
     async def call(self, method, params=(), sig=None):
         return await self.client.call(*self.defaults, method, params, sig)
 
-    async def get_property(self, prop):
-        return await self.client.get_property(*self.defaults, prop)
-
     @contextlib.asynccontextmanager
     async def signal(self, signal):
         async with self.client.signal(*self.defaults, signal) as queue:
             yield queue
+
+    async def get_property(self, prop):
+        return await self.client.get_property(*self.defaults, prop)
+
+    async def set_property(self, prop, value):
+        return await self.client.set_property(*self.defaults, prop, value)
+
+    async def watch_property(self, prop):
+        async for value in self.client.watch_property(*self.defaults, prop):
+            yield value
 
     async def portal_call(self, method, params=()):
         return await self.client.portal_call(*self.defaults, method, params)
@@ -110,12 +117,6 @@ class Client:
         elif len(m.returns) > 1:
             return result
 
-    async def get_property(self, name, path, iface, prop):
-        path, iface = await self.guess_path(name, 'properties', prop, path, iface)
-        iprop = 'org.freedesktop.DBus.Properties'
-        result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
-        return result[0]
-
     @contextlib.asynccontextmanager
     async def signal(self, name, path, iface, signal):
         path, iface = await self.guess_path(name, 'signals', signal, path, iface)
@@ -141,6 +142,29 @@ class Client:
                     'RemoveMatch',
                     ('s', [s.rule]),
                 )
+
+    async def get_property(self, name, path, iface, prop):
+        path, iface = await self.guess_path(name, 'properties', prop, path, iface)
+        iprop = 'org.freedesktop.DBus.Properties'
+        result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
+        return result[0]
+
+    async def set_property(self, name, path, iface, prop, value):
+        path, iface = await self.guess_path(name, 'properties', prop, path, iface)
+        iprop = 'org.freedesktop.DBus.Properties'
+        await self.con.call(name, path, iprop, 'Set', ('ssv', (iface, prop, value)))
+
+    async def watch_property(self, name, path, iface, prop):
+        path, iface = await self.guess_path(name, 'properties', prop, path, iface)
+        iprop = 'org.freedesktop.DBus.Properties'
+        async with self.signal(name, path, iprop, 'PropertiesChanged') as queue:
+            yield await self.get_property(name, path, iface, prop)
+            async for _iface, changed, invalidated in queue:
+                if _iface == iface:
+                    if prop in changed:
+                        yield changed[prop]
+                    elif prop in invalidated:
+                        yield None
 
     async def portal_call(self, name, path, iface, method, params=()):
         sender = self.con.unique_name.replace('.', '_')[1:]
