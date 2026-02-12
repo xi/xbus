@@ -2,7 +2,7 @@ import struct
 from dataclasses import dataclass
 
 TYPES = {
-    'y': 'b',  # byte
+    'y': 'B',  # byte
     'b': 'I',  # bool
     'n': 'h',  # int16
     'q': 'H',  # uint16
