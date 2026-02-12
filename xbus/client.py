@@ -5,9 +5,9 @@ from .schema import parse_schema
 
 
 class Signal:
-    def __init__(self, queue, name, path, iface, signal):
+    def __init__(self, queue, sender, path, iface, signal):
         self.queue = queue
-        self.name = name
+        self.sender = sender
         self.path = path
         self.iface = iface
         self.signal = signal
@@ -16,7 +16,7 @@ class Signal:
     def rule(self):
         return ','.join(f"{key}='{value}'" for key, value in {
             'type': 'signal',
-            'sender': self.name,
+            'sender': self.sender,
             'path': self.path,
             'interface': self.iface,
             'member': self.signal,
@@ -26,9 +26,9 @@ class Signal:
         while True:
             msg = await self.queue.get()
             self.queue.task_done()
-            # FIXME: msg does not contain well-known sender name
             if (
-                msg.path == self.path
+                msg.sender == self.sender
+                and msg.path == self.path
                 and msg.iface == self.iface
                 and msg.member == self.signal
             ):
@@ -130,6 +130,8 @@ class Client:
         # special handling on our end.
         path, iface = await self.guess_path(name, 'signals', signal, path, iface)
 
+        if not name.startswith(':'):
+            name = await self.bus.call('GetNameOwner', [name], 's')
         with self.con.signal_queue() as queue:
             s = Signal(queue, name, path, iface, signal)
             await self.bus.call('AddMatch', [s.rule], 's')
