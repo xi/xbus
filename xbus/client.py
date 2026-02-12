@@ -66,6 +66,12 @@ class Client:
     def __init__(self, con):
         self.con = con
         self.introspect_cache = {}
+        self.bus = Proxy(
+            self,
+            'org.freedesktop.DBus',
+            '/org/freedesktop/DBus',
+            'org.freedesktop.DBus',
+        )
 
     async def introspect(self, name, path):
         key = f'{name}{path}'
@@ -123,25 +129,11 @@ class Client:
 
         with self.con.signal_queue() as queue:
             s = Signal(queue, name, path, iface, signal)
-
-            await self.con.call(
-                'org.freedesktop.DBus',
-                '/org/freedesktop/DBus',
-                'org.freedesktop.DBus',
-                'AddMatch',
-                ('s', [s.rule]),
-            )
-
+            await self.bus.call('AddMatch', [s.rule], 's')
             try:
                 yield s
             finally:
-                await self.con.call(
-                    'org.freedesktop.DBus',
-                    '/org/freedesktop/DBus',
-                    'org.freedesktop.DBus',
-                    'RemoveMatch',
-                    ('s', [s.rule]),
-                )
+                await self.bus.call('RemoveMatch', [s.rule], 's')
 
     async def get_property(self, name, path, iface, prop):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
