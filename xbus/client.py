@@ -125,6 +125,9 @@ class Client:
 
     @contextlib.asynccontextmanager
     async def signal(self, name, path, iface, signal):
+        # NOTE: if we register the same match rule twice and then remove one of
+        # them, the other still exists on the bus. So we do not need any
+        # special handling on our end.
         path, iface = await self.guess_path(name, 'signals', signal, path, iface)
 
         with self.con.signal_queue() as queue:
