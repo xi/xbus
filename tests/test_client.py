@@ -1,7 +1,7 @@
 import unittest
 
 from xibus import get_client
-from xibus.connection import DBusError
+from xibus import DBusError
 
 
 class TestClient(unittest.IsolatedAsyncioTestCase):

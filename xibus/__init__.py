@@ -1,7 +1,9 @@
 import contextlib
 
 from .client import MagicClient
+from .client import Proxy  # noqa
 from .connection import get_connection
+from .connection import DBusError  # noqa
 
 
 @contextlib.asynccontextmanager
