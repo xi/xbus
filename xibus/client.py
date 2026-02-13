@@ -4,7 +4,7 @@ import random
 from .schema import parse_schema
 
 
-class Signal:
+class SignalQueue:
     def __init__(self, queue, sender, path, iface, signal):
         self.queue = queue
         self.sender = sender
@@ -106,12 +106,12 @@ class Client:
         if not name.startswith(':'):
             name = await self.bus.call('GetNameOwner', [name], 's')
         with self.con.signal_queue() as queue:
-            s = Signal(queue, name, path, iface, signal)
-            await self.bus.call('AddMatch', [s.rule], 's')
+            sq = SignalQueue(queue, name, path, iface, signal)
+            await self.bus.call('AddMatch', [sq.rule], 's')
             try:
-                yield s
+                yield sq
             finally:
-                await self.bus.call('RemoveMatch', [s.rule], 's')
+                await self.bus.call('RemoveMatch', [sq.rule], 's')
 
     async def get_property(self, name, path, iface, prop):
         iprop = 'org.freedesktop.DBus.Properties'
