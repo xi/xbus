@@ -1,4 +1,4 @@
-# xbus - pure python async D-Bus library
+# xibus - pure python async D-Bus library
 
 This is a pure python implementation of the [D-Bus
 Specification](https://dbus.freedesktop.org/doc/dbus-specification.html).
@@ -17,7 +17,7 @@ It consists of the following parts:
 
 ```python
 import asyncio
-from xbus import get_client
+from xibus import get_client
 
 async def amain():
     async with get_client('session') as c:

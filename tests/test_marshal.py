@@ -1,8 +1,8 @@
 import unittest
 
-from xbus.message import Msg
-from xbus.message import MsgFlag
-from xbus.message import MsgType
+from xibus.message import Msg
+from xibus.message import MsgFlag
+from xibus.message import MsgType
 
 MESSAGES = [
     {
