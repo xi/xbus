@@ -163,4 +163,4 @@ def get_connection(bus):
             'DBUS_SYSTEM_BUS_ADDRESS',
             'unix:path=/run/dbus/system_bus_socket',
         )
-    return Connection(addr.removeprefix('unix:path='))
+    return Connection(addr.removeprefix('unix:path=').split(',', 1)[0])
