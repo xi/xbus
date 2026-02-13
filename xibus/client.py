@@ -1,6 +1,7 @@
 import contextlib
 import random
 
+from .connection import DBusError
 from .schema import parse_schema
 
 
@@ -91,7 +92,6 @@ class Client:
             sig = ''.join(m.args.values())
 
         result = await self.con.call(name, path, iface, method, (sig, params))
-
         if len(m.returns) == 1:
             return result[0]
         elif len(m.returns) > 1:
@@ -151,8 +151,12 @@ class Client:
             'Response',
         ) as queue:
             await self.call(name, path, iface, method, params)
-            async for data in queue:
-                return data
+            async for status, value in queue:
+                if status != 0:
+                    # I don't think there is any way to get a
+                    # human-readable error message in this case
+                    raise DBusError(status)
+                return value
 
 
 class MagicClient(Client):
