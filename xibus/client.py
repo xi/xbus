@@ -14,13 +14,16 @@ class Signal:
 
     @property
     def rule(self):
-        return ','.join(f"{key}='{value}'" for key, value in {
-            'type': 'signal',
-            'sender': self.sender,
-            'path': self.path,
-            'interface': self.iface,
-            'member': self.signal,
-        }.items())
+        return ','.join(
+            f"{key}='{value}'"
+            for key, value in {
+                'type': 'signal',
+                'sender': self.sender,
+                'path': self.path,
+                'interface': self.iface,
+                'member': self.signal,
+            }.items()
+        )
 
     async def __aiter__(self):
         while True:
@@ -51,8 +54,8 @@ class Proxy:
     async def get_property(self, prop):
         return await self.client.get_property(*self.defaults, prop)
 
-    async def set_property(self, prop, value):
-        return await self.client.set_property(*self.defaults, prop, value)
+    async def set_property(self, prop, value, sig=None):
+        return await self.client.set_property(*self.defaults, prop, value, sig)
 
     async def watch_property(self, prop):
         async for value in self.client.watch_property(*self.defaults, prop):
@@ -113,11 +116,16 @@ class Client:
     async def get_property(self, name, path, iface, prop):
         iprop = 'org.freedesktop.DBus.Properties'
         result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
-        return result[0]
+        return result[0][1]
 
-    async def set_property(self, name, path, iface, prop, value):
+    async def set_property(self, name, path, iface, prop, value, sig=None):
         iprop = 'org.freedesktop.DBus.Properties'
-        await self.con.call(name, path, iprop, 'Set', ('ssv', (iface, prop, value)))
+        if not sig:
+            schema = await self.introspect(name, path)
+            sig = schema.interfaces[iface].properties[prop].type
+        await self.con.call(
+            name, path, iprop, 'Set', ('ssv', (iface, prop, (sig, value)))
+        )
 
     async def watch_property(self, name, path, iface, prop):
         iprop = 'org.freedesktop.DBus.Properties'
@@ -126,7 +134,7 @@ class Client:
             async for _iface, changed, invalidated in queue:
                 if _iface == iface:
                     if prop in changed:
-                        yield changed[prop]
+                        yield changed[prop][1]
                     elif prop in invalidated:
                         yield None
 
@@ -189,9 +197,9 @@ class MagicClient(Client):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
         return await super().get_property(name, path, iface, prop)
 
-    async def set_property(self, name, path, iface, prop, value):
+    async def set_property(self, name, path, iface, prop, value, sig=None):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
-        await super().set_property(name, path, iface, prop, value)
+        await super().set_property(name, path, iface, prop, value, sig)
 
     async def watch_property(self, name, path, iface, prop):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
