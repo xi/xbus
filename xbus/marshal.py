@@ -130,7 +130,7 @@ class Reader:
             (t,) = parse(sig)
             v = self.read(t)
             return (sig, v)
-        else:
+        else:  # pragma: no cover
             raise ValueError(type)
 
     def unmarshal(self, sig):
@@ -190,7 +190,7 @@ class Writer:
             (t,) = parse(sig)
             self.write('g', sig)
             self.write(t, v)
-        else:
+        else:  # pragma: no cover
             raise ValueError(type)
 
     def marshal(self, sig, data):
