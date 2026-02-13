@@ -136,3 +136,12 @@ That said, I really like how the different layers of this protocol are stacked
 on top of each other. Once you have the wire format, you can build messages on
 top of that. Then you can build method calls and signals on top of messages.
 Finally, you can build introspection and property access on top of method calls.
+
+## Links
+
+-   [dbus-next](https://github.com/altdesktop/python-dbus-next) and its forks
+    [dbus-fast](https://github.com/bluetooth-devices/dbus-fast) and
+    [asyncdbus](https://github.com/M-o-a-T/asyncdbus) also implements D-Bus in
+    python, but the code is much more complex.
+-   [Talk on why systemd is moving from D-Bus to
+    Varlink](https://mirror.as35701.net/video.fosdem.org/2026/ub2147/NFNKEK-varlink-ipc-system-keynote.av1.webm)
