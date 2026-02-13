@@ -113,4 +113,4 @@ class Msg:
         r.skip_padding(8)
         msg.body = r.unmarshal(msg.sig)
 
-        return msg
+        return msg, r.buf[r.offset:]

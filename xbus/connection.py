@@ -37,8 +37,8 @@ class Connection:
 
     def on_read(self):
         buf, fds, _, _ = socket.recv_fds(self.sock, 134217728, 255)
-        if buf:
-            msg = Msg.unmarshal(buf, fds)
+        while buf:
+            msg, buf = Msg.unmarshal(buf, fds)
             if msg.reply_serial is not None:
                 if msg.reply_serial in self.replies:
                     future = self.replies.pop(msg.reply_serial)
