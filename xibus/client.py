@@ -81,6 +81,73 @@ class Client:
             self.introspect_cache[key] = parse_schema(xml)
         return self.introspect_cache[key]
 
+    async def call(self, name, path, iface, method, params=(), sig=None):
+        schema = await self.introspect(name, path)
+        m = schema.interfaces[iface].methods[method]
+        if not sig:
+            sig = ''.join(m.args.values())
+
+        result = await self.con.call(name, path, iface, method, (sig, params))
+
+        if len(m.returns) == 1:
+            return result[0]
+        elif len(m.returns) > 1:
+            return result
+
+    @contextlib.asynccontextmanager
+    async def signal(self, name, path, iface, signal):
+        # NOTE: if we register the same match rule twice and then remove one of
+        # them, the other still exists on the bus. So we do not need any
+        # special handling on our end.
+
+        if not name.startswith(':'):
+            name = await self.bus.call('GetNameOwner', [name], 's')
+        with self.con.signal_queue() as queue:
+            s = Signal(queue, name, path, iface, signal)
+            await self.bus.call('AddMatch', [s.rule], 's')
+            try:
+                yield s
+            finally:
+                await self.bus.call('RemoveMatch', [s.rule], 's')
+
+    async def get_property(self, name, path, iface, prop):
+        iprop = 'org.freedesktop.DBus.Properties'
+        result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
+        return result[0]
+
+    async def set_property(self, name, path, iface, prop, value):
+        iprop = 'org.freedesktop.DBus.Properties'
+        await self.con.call(name, path, iprop, 'Set', ('ssv', (iface, prop, value)))
+
+    async def watch_property(self, name, path, iface, prop):
+        iprop = 'org.freedesktop.DBus.Properties'
+        async with self.signal(name, path, iprop, 'PropertiesChanged') as queue:
+            yield await self.get_property(name, path, iface, prop)
+            async for _iface, changed, invalidated in queue:
+                if _iface == iface:
+                    if prop in changed:
+                        yield changed[prop]
+                    elif prop in invalidated:
+                        yield None
+
+    async def portal_call(self, name, path, iface, method, params=()):
+        sender = self.con.unique_name.replace('.', '_')[1:]
+        token = str(random.randint(1_000_000_000, 10_000_000_000))
+        params[-1]['handle_token'] = ('s', token)
+        request_path = f'/org/freedesktop/portal/desktop/request/{sender}/{token}'
+
+        async with self.signal(
+            name,
+            request_path,
+            'org.freedesktop.portal.Request',
+            'Response',
+        ) as queue:
+            await self.call(name, path, iface, method, params)
+            async for data in queue:
+                return data
+
+
+class MagicClient(Client):
     async def iter_paths(self, name, path=''):
         schema = await self.introspect(name, path or '/')
         if schema.interfaces:
@@ -110,71 +177,23 @@ class Client:
 
     async def call(self, name, path, iface, method, params=(), sig=None):
         path, iface = await self.guess_path(name, 'methods', method, path, iface)
-
-        schema = await self.introspect(name, path)
-        m = schema.interfaces[iface].methods[method]
-        if not sig:
-            sig = ''.join(m.args.values())
-
-        result = await self.con.call(name, path, iface, method, (sig, params))
-
-        if len(m.returns) == 1:
-            return result[0]
-        elif len(m.returns) > 1:
-            return result
+        return await super().call(name, path, iface, method, params, sig)
 
     @contextlib.asynccontextmanager
     async def signal(self, name, path, iface, signal):
-        # NOTE: if we register the same match rule twice and then remove one of
-        # them, the other still exists on the bus. So we do not need any
-        # special handling on our end.
         path, iface = await self.guess_path(name, 'signals', signal, path, iface)
-
-        if not name.startswith(':'):
-            name = await self.bus.call('GetNameOwner', [name], 's')
-        with self.con.signal_queue() as queue:
-            s = Signal(queue, name, path, iface, signal)
-            await self.bus.call('AddMatch', [s.rule], 's')
-            try:
-                yield s
-            finally:
-                await self.bus.call('RemoveMatch', [s.rule], 's')
+        async with super().signal(name, path, iface, signal) as queue:
+            yield queue
 
     async def get_property(self, name, path, iface, prop):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
-        iprop = 'org.freedesktop.DBus.Properties'
-        result = await self.con.call(name, path, iprop, 'Get', ('ss', (iface, prop)))
-        return result[0]
+        return await super().get_property(name, path, iface, prop)
 
     async def set_property(self, name, path, iface, prop, value):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
-        iprop = 'org.freedesktop.DBus.Properties'
-        await self.con.call(name, path, iprop, 'Set', ('ssv', (iface, prop, value)))
+        await super().set_property(name, path, iface, prop, value)
 
     async def watch_property(self, name, path, iface, prop):
         path, iface = await self.guess_path(name, 'properties', prop, path, iface)
-        iprop = 'org.freedesktop.DBus.Properties'
-        async with self.signal(name, path, iprop, 'PropertiesChanged') as queue:
-            yield await self.get_property(name, path, iface, prop)
-            async for _iface, changed, invalidated in queue:
-                if _iface == iface:
-                    if prop in changed:
-                        yield changed[prop]
-                    elif prop in invalidated:
-                        yield None
-
-    async def portal_call(self, name, path, iface, method, params=()):
-        sender = self.con.unique_name.replace('.', '_')[1:]
-        token = str(random.randint(1_000_000_000, 10_000_000_000))
-        params[-1]['handle_token'] = ('s', token)
-        request_path = f'/org/freedesktop/portal/desktop/request/{sender}/{token}'
-
-        async with self.signal(
-            name,
-            request_path,
-            'org.freedesktop.portal.Request',
-            'Response',
-        ) as queue:
-            await self.call(name, path, iface, method, params)
-            async for data in queue:
-                return data
+        async for value in super().watch_property(name, path, iface, prop):
+            yield value
