@@ -158,7 +158,7 @@ def get_connection(bus):
             'DBUS_SESSION_BUS_ADDRESS',
             f'unix:path=/run/user/{os.getuid()}/bus',
         )
-    else:
+    else:  # pragma: no cover
         addr = os.getenv(
             'DBUS_SYSTEM_BUS_ADDRESS',
             'unix:path=/run/dbus/system_bus_socket',
