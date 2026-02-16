@@ -1,8 +1,22 @@
 import contextlib
+import enum
 import random
 
 from .connection import DBusError
 from .schema import Schema
+
+
+class NameFlag(enum.IntEnum):
+    ALLOW_REPLACEMENT = 0x1
+    REPLACE_EXISTING = 0x2
+    DO_NOT_QUEUE = 0x4
+
+
+class RequestNameReply(enum.IntEnum):
+    PRIMARY_OWNER = 1
+    IN_QUEUE = 2
+    EXISTS = 3
+    ALREADY_OWNER = 4
 
 
 class SignalQueue:
@@ -110,6 +124,17 @@ class Client:
                 yield sq
             finally:
                 await self.bus.call('RemoveMatch', [sq.rule], 's')
+
+    @contextlib.asynccontextmanager
+    async def acquire_name(self, name):
+        with self.con.call_queue(name) as queue:
+            reply = await self.bus.call('RequestName', (name, NameFlag.DO_NOT_QUEUE))
+            if reply != RequestNameReply.PRIMARY_OWNER:
+                raise DBusError('Failed to acquire name', name, reply)
+            try:
+                yield queue
+            finally:
+                await self.bus.call('ReleaseName', (name,))
 
     async def get_property(self, name, path, iface, prop):
         iprop = 'org.freedesktop.DBus.Properties'

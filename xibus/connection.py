@@ -35,6 +35,7 @@ class Connection:
         self.serial = 0
         self.send_queue = []
         self.replies = {}
+        self.call_queues = {}
         self.signal_queues = set()
 
         if not self.loop:
@@ -57,7 +58,7 @@ class Connection:
                     future = self.replies.pop(msg.reply_serial)
                     future.set_result(msg)
             elif msg.type == MsgType.METHOD_CALL:
-                raise NotImplementedError
+                self.call_queues[msg.destination].put_nowait(msg)
             elif msg.type == MsgType.SIGNAL:
                 for queue in self.signal_queues:
                     queue.put_nowait(msg)
@@ -131,6 +132,18 @@ class Connection:
             yield iter_queue(queue)
         finally:
             self.signal_queues.remove(queue)
+            queue.shutdown()
+
+    @contextmanager
+    def call_queue(self, name):
+        if name in self.call_queues:
+            raise ValueError(name)
+        queue = asyncio.Queue()
+        self.call_queues[name] = queue
+        try:
+            yield iter_queue(queue)
+        finally:
+            self.call_queues.pop(name)
             queue.shutdown()
 
     async def call(self, dest, path, iface, method, body, sig, flags=MsgFlag.NONE):
