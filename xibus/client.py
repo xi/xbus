@@ -1,5 +1,7 @@
 import contextlib
+import random
 
+from .connection import DBusError
 from .schema import Schema
 
 
@@ -57,6 +59,9 @@ class Proxy:
     async def watch_property(self, prop):
         async for value in self.client.watch_property(*self.defaults, prop):
             yield value
+
+    async def portal_call(self, method, params=()):
+        return await self.client.portal_call(*self.defaults, method, params)
 
 
 class Client:
@@ -130,6 +135,26 @@ class Client:
                         yield changed[prop][1]
                     elif prop in invalidated:
                         yield None
+
+    async def portal_call(self, name, path, iface, method, params=()):
+        sender = self.con.unique_name.replace('.', '_')[1:]
+        token = str(random.randint(1_000_000_000, 10_000_000_000))
+        params[-1]['handle_token'] = ('s', token)
+        request_path = f'/org/freedesktop/portal/desktop/request/{sender}/{token}'
+
+        async with self.subscribe_signal(
+            name,
+            request_path,
+            'org.freedesktop.portal.Request',
+            'Response',
+        ) as queue:
+            await self.call(name, path, iface, method, params)
+            async for status, value in queue:
+                if status != 0:
+                    # I don't think there is any way to get a
+                    # human-readable error message in this case
+                    raise DBusError(status)
+                return value
 
 
 class MagicClient(Client):
