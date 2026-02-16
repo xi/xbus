@@ -172,6 +172,22 @@ class Connection:
         else:
             raise ValueError(response.type)
 
+    async def emit_signal(self, path, iface, signal, body, sig, flags=MsgFlag.NONE):
+        if not RE_PATH.match(path):
+            raise InvalidPathError(path)
+
+        msg = Msg(
+            MsgType.SIGNAL,
+            self.get_serial(),
+            path=path,
+            iface=iface,
+            member=signal,
+            body=body,
+            sig=sig,
+            flags=flags,
+        )
+
+        await self.send(*msg.marshal())
 
 def get_connection(bus):
     if bus == 'session':
