@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import socket
+from contextlib import contextmanager
 
 from .message import Msg
 from .message import MsgFlag
@@ -34,6 +35,7 @@ class Connection:
         self.serial = 0
         self.send_queue = []
         self.replies = {}
+        self.signal_queues = set()
 
         if not self.loop:
             self.loop = asyncio.get_running_loop()
@@ -57,7 +59,8 @@ class Connection:
             elif msg.type == MsgType.METHOD_CALL:
                 raise NotImplementedError
             elif msg.type == MsgType.SIGNAL:
-                raise NotImplementedError
+                for queue in self.signal_queues:
+                    queue.put_nowait(msg)
             else:
                 raise ValueError(msg)
 
@@ -119,6 +122,16 @@ class Connection:
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
         self.sock = None
+
+    @contextmanager
+    def signal_queue(self):
+        queue = asyncio.Queue()
+        self.signal_queues.add(queue)
+        try:
+            yield iter_queue(queue)
+        finally:
+            self.signal_queues.remove(queue)
+            queue.shutdown()
 
     async def call(self, dest, path, iface, method, body, sig, flags=MsgFlag.NONE):
         if not RE_PATH.match(path):
