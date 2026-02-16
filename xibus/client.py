@@ -48,6 +48,16 @@ class Proxy:
         async with self.client.subscribe_signal(*self.defaults, signal) as queue:
             yield queue
 
+    async def get_property(self, prop):
+        return await self.client.get_property(*self.defaults, prop)
+
+    async def set_property(self, prop, value, sig=None):
+        return await self.client.set_property(*self.defaults, prop, value, sig)
+
+    async def watch_property(self, prop):
+        async for value in self.client.watch_property(*self.defaults, prop):
+            yield value
+
 
 class Client:
     def __init__(self, con):
@@ -95,3 +105,28 @@ class Client:
                 yield sq
             finally:
                 await self.bus.call('RemoveMatch', [sq.rule], 's')
+
+    async def get_property(self, name, path, iface, prop):
+        iprop = 'org.freedesktop.DBus.Properties'
+        result = await self.call(name, path, iprop, 'Get', (iface, prop), 'ss')
+        return result[1]
+
+    async def set_property(self, name, path, iface, prop, value, sig=None):
+        iprop = 'org.freedesktop.DBus.Properties'
+        if sig is None:
+            schema = await self.introspect(name, path)
+            sig = schema.interfaces[iface].properties[prop].type
+        await self.call(name, path, iprop, 'Set', (iface, prop, (sig, value)), 'ssv')
+
+    async def watch_property(self, name, path, iface, prop):
+        iprop = 'org.freedesktop.DBus.Properties'
+        async with self.subscribe_signal(
+            name, path, iprop, 'PropertiesChanged'
+        ) as queue:
+            yield await self.get_property(name, path, iface, prop)
+            async for _iface, changed, invalidated in queue:
+                if _iface == iface:
+                    if prop in changed:
+                        yield changed[prop][1]
+                    elif prop in invalidated:
+                        yield None
