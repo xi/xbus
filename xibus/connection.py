@@ -132,7 +132,6 @@ class Connection:
             yield iter_queue(queue)
         finally:
             self.signal_queues.remove(queue)
-            queue.shutdown()
 
     @contextmanager
     def call_queue(self, name):
@@ -144,7 +143,6 @@ class Connection:
             yield iter_queue(queue)
         finally:
             self.call_queues.pop(name)
-            queue.shutdown()
 
     async def call(self, dest, path, iface, method, body, sig, flags=MsgFlag.NONE):
         if not RE_PATH.match(path):
