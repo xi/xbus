@@ -125,8 +125,8 @@ class Connection:
         self.sock = None
 
     @contextmanager
-    def signal_queue(self):
-        queue = asyncio.Queue()
+    def signal_queue(self, *, maxsize=32):
+        queue = asyncio.Queue(maxsize)
         self.signal_queues.add(queue)
         try:
             yield iter_queue(queue)
@@ -134,10 +134,10 @@ class Connection:
             self.signal_queues.remove(queue)
 
     @contextmanager
-    def call_queue(self, name):
+    def call_queue(self, name, *, maxsize=32):
         if name in self.call_queues:
             raise ValueError(name)
-        queue = asyncio.Queue()
+        queue = asyncio.Queue(maxsize)
         self.call_queues[name] = queue
         try:
             yield iter_queue(queue)
